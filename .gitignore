@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+settings.json
+
+sherpa-onnx-*/
+*.onnx
+*.wav
