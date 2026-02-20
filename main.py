@@ -30,7 +30,13 @@ class RealtimeTranslator:
             api_key=self.config.get("api_key", ""),
             api_base=self.config.get("api_base", "https://api.deepseek.com"),
             model=self.config.get("model", "deepseek-chat"),
-            bypass_proxy=self.config.get("bypass_proxy", False)
+            bypass_proxy=self.config.get("bypass_proxy", False),
+            translate_api_key=self.config.get("translate_api_key", ""),
+            translate_api_base=self.config.get("translate_api_base", "https://api.siliconflow.cn/v1"),
+            translate_model=self.config.get("translate_model", "Qwen/Qwen3-8B"),
+            organize_api_key=self.config.get("organize_api_key", ""),
+            organize_api_base=self.config.get("organize_api_base", "https://api.deepseek.com"),
+            organize_model=self.config.get("organize_model", "deepseek-chat")
         )
         
         self.is_running = False
@@ -176,11 +182,17 @@ class MainWindow(TranslationBar):
             api_key=config.get("api_key", ""),
             api_base=config.get("api_base", "https://api.deepseek.com"),
             model=config.get("model", "deepseek-chat"),
-            bypass_proxy=config.get("bypass_proxy", False)
+            bypass_proxy=config.get("bypass_proxy", False),
+            translate_api_key=config.get("translate_api_key", ""),
+            translate_api_base=config.get("translate_api_base", "https://api.siliconflow.cn/v1"),
+            translate_model=config.get("translate_model", "Qwen/Qwen3-8B"),
+            organize_api_key=config.get("organize_api_key", ""),
+            organize_api_base=config.get("organize_api_base", "https://api.deepseek.com"),
+            organize_model=config.get("organize_model", "deepseek-chat")
         )
     
     def on_result_clicked(self):
-        self.result_dialog = ResultDialog(self.translator.translator.get_all_results())
+        self.result_dialog = ResultDialog(self.translator.translator.get_all_results(), self.translator.translator)
         self.result_dialog.exec()
     
     def on_start_finished(self, success):

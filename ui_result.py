@@ -1,34 +1,70 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-    QTextEdit, QPushButton, QFileDialog
+    QTextEdit, QPushButton, QFileDialog, QSplitter
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont
 import json
 from datetime import datetime
 
+class OrganizeThread(QThread):
+    finished = Signal(str)
+    error = Signal(str)
+    
+    def __init__(self, translator, translations):
+        super().__init__()
+        self.translator = translator
+        self.translations = translations
+    
+    def run(self):
+        result, error = self.translator.organize_results(self.translations)
+        if error:
+            self.error.emit(error)
+        else:
+            self.finished.emit(result)
+
 class ResultDialog(QDialog):
-    def __init__(self, translations, parent=None):
+    def __init__(self, translations, translator=None, parent=None):
         super().__init__(parent)
         self.translations = translations
+        self.translator = translator
+        self.organized_text = ""
+        self.organize_thread = None
         self._init_ui()
         self._display_results()
     
     def _init_ui(self):
         self.setWindowTitle("翻译结果")
-        self.setMinimumSize(600, 400)
-        self.resize(700, 500)
+        self.setMinimumSize(800, 500)
+        self.resize(900, 600)
         
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
         
-        self.result_text = QTextEdit()
-        self.result_text.setReadOnly(True)
-        self.result_text.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
-        layout.addWidget(self.result_text)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        self.original_text = QTextEdit()
+        self.original_text.setReadOnly(True)
+        self.original_text.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        self.original_text.setPlaceholderText("原文和译文")
+        splitter.addWidget(self.original_text)
+        
+        self.organized_text_edit = QTextEdit()
+        self.organized_text_edit.setReadOnly(True)
+        self.organized_text_edit.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        self.organized_text_edit.setPlaceholderText("整理后的文本（点击'整理'按钮生成）")
+        splitter.addWidget(self.organized_text_edit)
+        
+        splitter.setSizes([450, 450])
+        layout.addWidget(splitter)
         
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
+        
+        self.organize_btn = QPushButton("整理")
+        self.organize_btn.setFixedWidth(80)
+        self.organize_btn.clicked.connect(self._on_organize)
+        btn_layout.addWidget(self.organize_btn)
         
         copy_btn = QPushButton("复制全部")
         copy_btn.setFixedWidth(80)
@@ -76,14 +112,23 @@ class ResultDialog(QDialog):
             QPushButton:pressed {
                 background-color: #555555;
             }
+            QPushButton:disabled {
+                background-color: #2a2a2a;
+                color: #666666;
+            }
+            QSplitter::handle {
+                background-color: #3c3c3c;
+                width: 2px;
+            }
         """)
         
         font = QFont("Microsoft YaHei", 11)
-        self.result_text.setFont(font)
+        self.original_text.setFont(font)
+        self.organized_text_edit.setFont(font)
     
     def _display_results(self):
         if not self.translations:
-            self.result_text.setText("暂无翻译结果")
+            self.original_text.setText("暂无翻译结果")
             return
         
         lines = []
@@ -96,10 +141,41 @@ class ResultDialog(QDialog):
             lines.append(f"    译文: {translated}")
             lines.append("")
         
-        self.result_text.setText("\n".join(lines))
+        self.original_text.setText("\n".join(lines))
+    
+    def _on_organize(self):
+        if not self.translator:
+            self.organized_text_edit.setText("[错误: 未配置翻译器]")
+            return
+        
+        if not self.translations:
+            self.organized_text_edit.setText("[没有翻译结果]")
+            return
+        
+        self.organize_btn.setEnabled(False)
+        self.organize_btn.setText("整理中...")
+        self.organized_text_edit.setText("正在整理...")
+        
+        self.organize_thread = OrganizeThread(self.translator, self.translations)
+        self.organize_thread.finished.connect(self._on_organize_finished)
+        self.organize_thread.error.connect(self._on_organize_error)
+        self.organize_thread.start()
+    
+    def _on_organize_finished(self, result):
+        self.organized_text = result
+        self.organized_text_edit.setText(result)
+        self.organize_btn.setEnabled(True)
+        self.organize_btn.setText("整理")
+    
+    def _on_organize_error(self, error):
+        self.organized_text_edit.setText(f"[整理错误: {error}]")
+        self.organize_btn.setEnabled(True)
+        self.organize_btn.setText("整理")
     
     def _on_copy(self):
-        text = self.result_text.toPlainText()
+        text = "=== 原始翻译 ===\n" + self.original_text.toPlainText()
+        if self.organized_text:
+            text += "\n\n=== 整理后 ===\n" + self.organized_text
         from PySide6.QtWidgets import QApplication
         clipboard = QApplication.clipboard()
         clipboard.setText(text)
@@ -114,8 +190,21 @@ class ResultDialog(QDialog):
         
         if file_path:
             if file_path.endswith(".json"):
+                export_data = {
+                    "translations": self.translations,
+                    "organized": self.organized_text if self.organized_text else None
+                }
                 with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(self.translations, f, ensure_ascii=False, indent=2)
+                    json.dump(export_data, f, ensure_ascii=False, indent=2)
             else:
+                text = "=== 原始翻译 ===\n" + self.original_text.toPlainText()
+                if self.organized_text:
+                    text += "\n\n=== 整理后 ===\n" + self.organized_text
                 with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(self.result_text.toPlainText())
+                    f.write(text)
+    
+    def closeEvent(self, event):
+        if self.organize_thread and self.organize_thread.isRunning():
+            self.organize_thread.terminate()
+            self.organize_thread.wait()
+        event.accept()

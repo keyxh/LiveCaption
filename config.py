@@ -12,7 +12,13 @@ DEFAULT_CONFIG = {
     "window_topmost": False,
     "font_size": 14,
     "window_opacity": 0.9,
-    "bypass_proxy": False
+    "bypass_proxy": False,
+    "translate_api_key": "",
+    "translate_api_base": "https://api.siliconflow.cn/v1",
+    "translate_model": "Qwen/Qwen3-8B",
+    "organize_api_key": "",
+    "organize_api_base": "https://api.deepseek.com",
+    "organize_model": "deepseek-chat"
 }
 
 def load_config():
